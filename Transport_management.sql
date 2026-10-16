@@ -529,6 +529,6 @@ INSERT INTO notices (notice_id, title, description, notice_date, notice_status) 
 (4, 'Char Dham Yatra services to continue till 15 November 2026', 'Char Dham bus services from Rishikesh and Haridwar will operate till 15 November 2026. Advance booking is recommended during the festival season.', '2026-10-01', 'ACTIVE'),
 (5, 'Delhi night services - revised departure timings', 'Night Volvo and Janrath services from Dehradun ISBT to Delhi will depart as per the revised timings listed in the timetable. Passengers should reach the ISBT 30 minutes before departure.', '2026-10-05', 'ACTIVE'),
 (6, 'Uttarkashi-Gangotri road: single-lane movement near Bhatwari', 'Only single-lane movement is allowed near Bhatwari. Buses to Gangotri may take up to 1 hour extra.', '2026-10-08', 'ACTIVE');
--- No original INSERT data was provided for BOOKINGS, PAYMENTS, FEEDBACK, or BUS_TRACKING.
+
 
 
