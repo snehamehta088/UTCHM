@@ -1,4 +1,5 @@
 CREATE DATABASE UTCHM;
+
 USE UTCHM;
 
 CREATE TABLE USERS(
@@ -16,22 +17,22 @@ CREATE TABLE BUSES(
     BUS_NUMBER VARCHAR(20) UNIQUE NOT NULL,
     BUS_TYPE VARCHAR(30) NOT NULL,
     CAPACITY INT NOT NULL,
-    STATUS ENUM('ACTIVE','INACTIVE','MAINTENANCE') 
-    DEFAULT 'ACTIVE'
+    STATUS ENUM('ACTIVE','INACTIVE','MAINTENANCE') NOT NULL DEFAULT 'ACTIVE'
 );
 
 CREATE TABLE ROUTES(
     ROUTE_ID INT PRIMARY KEY AUTO_INCREMENT,
     SOURCE VARCHAR(100) NOT NULL,
     DESTINATION VARCHAR(100) NOT NULL, 
-    DISTANCE DECIMAL(10,2) NOT NULL,
-    DURATION TIME NOT NULL
+    DISTANCE_KM DECIMAL(10,2) NOT NULL,
+    DURATION TIME NOT NULL,
+    ROUTE_TYPE ENUM('HILL','PLAIN','INTERSTATE')  NOT NULL DEFAULT 'HILL'
 );
 
 CREATE TABLE STOPS(
     STOP_ID INT PRIMARY KEY AUTO_INCREMENT,
     STOP_NAME VARCHAR(100) NOT NULL,
-    CITY VARCHAR(100) NOT NULL,
+    LOCATION VARCHAR(100) NOT NULL,
     LATITUDE DECIMAL(10,7),
     LONGITUDE DECIMAL(10,7)
 );
@@ -42,9 +43,10 @@ CREATE TABLE SCHEDULES(
     ROUTE_ID INT NOT NULL,
     DEPARTURE_TIME TIME NOT NULL,
     ARRIVAL_TIME TIME NOT NULL,
-    OPERATING_DAYS VARCHAR(100) NOT NULL,
-    FOREIGN KEY (BUS_ID) REFERENCES BUSES(BUS_ID),
-    FOREIGN KEY (ROUTE_ID) REFERENCES ROUTES(ROUTE_ID)
+    OPERATING_DAYS VARCHAR(100) NOT NULL DEFAULT 'DAILY',
+    CONSTRAINT FK_SCHEDULE_BUS FOREIGN KEY (BUS_ID) REFERENCES BUSES(BUS_ID),
+    CONSTRAINT FK_SCHEDULE_ROUTE FOREIGN KEY (ROUTE_ID) REFERENCES ROUTES(ROUTE_ID)
+    ON UPDATE CASCADE ON DELETE RESTRICT
 );
 
 CREATE TABLE FARES(
@@ -52,7 +54,9 @@ CREATE TABLE FARES(
     ROUTE_ID INT NOT NULL,
     BUS_TYPE VARCHAR(30) NOT NULL,
     AMOUNT DECIMAL(10,2) NOT NULL,
-    FOREIGN KEY (ROUTE_ID) REFERENCES ROUTES(ROUTE_ID)
+    CONSTRAINT UQ_FARE UNIQUE (ROUTE_ID,BUS_TYPE),
+    CONSTRAINT FK_FARE_ROUTE FOREIGN KEY (ROUTE_ID) REFERENCES ROUTES(ROUTE_ID)
+	ON UPDATE CASCADE ON DELETE CASCADE
 );
 
 CREATE TABLE BOOKINGS(
@@ -60,38 +64,38 @@ CREATE TABLE BOOKINGS(
     USER_ID INT NOT NULL,
     SCHEDULE_ID INT NOT NULL,
     TRAVEL_DATE DATE NOT NULL,
-    SEAT_NUMBER INT NOT NULL,
-    BOOKING_STATUS ENUM('CONFIRMED','PENDING','CANCELLED') DEFAULT 'PENDING',
-    FOREIGN KEY (USER_ID) REFERENCES USERS(USER_ID),
-    FOREIGN KEY (SCHEDULE_ID) REFERENCES SCHEDULES(SCHEDULE_ID),
-    UNIQUE (SCHEDULE_ID, TRAVEL_DATE, SEAT_NUMBER)
+    SEAT_NUMBER VARCHAR(10) NOT NULL,
+    BOOKING_STATUS ENUM('CONFIRMED','PENDING','CANCELLED') NOT NULL DEFAULT 'PENDING',
+    CONSTRAINT FK_BOOKING_USER FOREIGN KEY (USER_ID) REFERENCES USERS(USER_ID) ON UPDATE CASCADE ON DELETE CASCADE,
+    CONSTRAINT FK_BOOKING_SCHEDULE FOREIGN KEY (SCHEDULE_ID) REFERENCES SCHEDULES(SCHEDULE_ID) ON UPDATE CASCADE ON DELETE RESTRICT,
+    UNIQUE (SCHEDULE_ID,TRAVEL_DATE,SEAT_NUMBER)
 );
 
 CREATE TABLE PAYMENTS(
 	PAYMENT_ID INT PRIMARY KEY AUTO_INCREMENT,
     BOOKING_ID INT NOT NULL,
     AMOUNT DECIMAL(10,2) NOT NULL,
-    PAYMENT_METHOD ENUM('UPI','CARD','NET_BANKING') NOT NULL,
-    PAYMENT_STATUS ENUM ('PENDING','SUCCESS','FAILED','REFUNDED') DEFAULT 'PENDING',
-    PAYMENT_DATE DATETIME,
-    FOREIGN KEY (BOOKING_ID) REFERENCES BOOKINGS(BOOKING_ID)
+    PAYMENT_METHOD ENUM('UPI','CARD','NET_BANKING') NOT NULL DEFAULT 'UPI',
+    PAYMENT_STATUS ENUM ('PENDING','SUCCESS','FAILED','REFUNDED') NOT NULL DEFAULT 'PENDING',
+    CONSTRAINT FK_PAYMENT_BOOKING FOREIGN KEY (BOOKING_ID) REFERENCES BOOKINGS(BOOKING_ID) ON UPDATE CASCADE ON DELETE CASCADE
 );
 
 CREATE TABLE NOTICES(
 	NOTICE_ID INT PRIMARY KEY AUTO_INCREMENT,
-    TITLE VARCHAR(20) NOT NULL,
+    TITLE VARCHAR(200) NOT NULL,
     DESCRIPTION TEXT NOT NULL,
     NOTICE_DATE DATE NOT NULL,
-    NOTICE_STATUS ENUM ('ACTIVE','INACTIVE') DEFAULT 'ACTIVE'
+    NOTICE_STATUS ENUM ('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE'
 );
 
 CREATE TABLE FEEDBACK(
 	FEEDBACK_ID INT PRIMARY KEY AUTO_INCREMENT,
     USER_ID INT NOT NULL,
     SUBJECT VARCHAR(50) NOT NULL,
-    MESSAGE TEXT NOT NULL,
-    RESPONSE_STATUS ENUM('PENDING','RESPONDED') DEFAULT 'PENDING',
-    FOREIGN KEY (USER_ID) REFERENCES USERS(USER_ID)
+    MESSAGE TEXT,
+    RESPONSE_STATUS ENUM('PENDING','RESPONDED') NOT NULL DEFAULT 'PENDING',
+    CONSTRAINT FK_FEEDBACK_USER FOREIGN KEY (USER_ID) REFERENCES USERS(USER_ID)
+    ON UPDATE CASCADE ON DELETE CASCADE
 );
 
 CREATE TABLE ROUTE_STOPS(
@@ -101,8 +105,9 @@ CREATE TABLE ROUTE_STOPS(
     ARRIVAL_TIME TIME,
     DEPARTURE_TIME TIME,
     PRIMARY KEY (ROUTE_ID, STOP_ID),
-    FOREIGN KEY (ROUTE_ID) REFERENCES ROUTES (ROUTE_ID),
-    FOREIGN KEY (STOP_ID) REFERENCES STOPS (STOP_ID)
+    CONSTRAINT UQ_ROUTE_SEQ UNIQUE (ROUTE_ID, SEQUENCE_NUMBER),
+    CONSTRAINT FK_RS_ROUTE FOREIGN KEY (ROUTE_ID) REFERENCES ROUTES (ROUTE_ID) ON UPDATE CASCADE ON DELETE CASCADE,
+    CONSTRAINT FK_RS_STOPS FOREIGN KEY (STOP_ID) REFERENCES STOPS (STOP_ID) ON UPDATE CASCADE ON DELETE RESTRICT
 );
 
 CREATE TABLE BUS_TRACKING(
@@ -112,8 +117,9 @@ CREATE TABLE BUS_TRACKING(
     LONGITUDE DECIMAL(10,7) NOT NULL,
     TIME_STAMP TIMESTAMP NOT NULL,
     SPEED DECIMAL(10,2),
-    TRACKING_STAIUS ENUM ('MOVING', 'STOPPED', 'DELAYED') DEFAULT 'MOVING',
-    FOREIGN KEY (BUS_ID) REFERENCES BUSES(BUS_ID)
+    TRACKING_STATUS ENUM ('MOVING', 'STOPPED', 'DELAYED') DEFAULT 'MOVING',
+    CONSTRAINT FK_TRACKING_BUS FOREIGN KEY (BUS_ID) REFERENCES BUSES(BUS_ID)
+    ON UPDATE CASCADE ON DELETE CASCADE
 );
 
 CREATE TABLE DRIVERS(
@@ -122,6 +128,407 @@ CREATE TABLE DRIVERS(
     PHONE_NUMBER VARCHAR(15) UNIQUE NOT NULL,
     LICENSE_NUMBER VARCHAR(50) UNIQUE NOT NULL,
     DRIVER_STATUS ENUM ('ACTIVE','INACTIVE') DEFAULT 'ACTIVE',
-    ASSIGNED_BUS INT NOT NULL,
-    FOREIGN KEY (ASSIGNED_BUS) REFERENCES BUSES(BUS_ID)
+    ASSIGNED_BUS INT,
+    CONSTRAINT FK_DRIVER_BUS FOREIGN KEY (ASSIGNED_BUS) REFERENCES BUSES(BUS_ID)
+	ON UPDATE CASCADE ON DELETE SET NULL
 );
+
+
+
+-- STOPS
+INSERT INTO stops (stop_id, stop_name, location, latitude, longitude) VALUES
+(1, 'Dehradun ISBT', 'ISBT Majra, Dehradun', 30.287906, 77.998033),
+(2, 'Mussoorie Library Bus Stand', 'Mussoorie, Dehradun', 30.456901, 78.078291),
+(3, 'Dhanaulti Bus Stop', 'Dhanaulti, Tehri Garhwal', 30.458292, 78.208378),
+(4, 'Chamba Bus Stand', 'Chamba, Tehri Garhwal', 30.345610, 78.394320),
+(5, 'New Tehri Bus Station', 'New Tehri, Tehri Garhwal', 30.374450, 78.432770),
+(6, 'Rishikesh Bus Stand', 'Rishikesh, Dehradun', 30.108654, 78.291619),
+(7, 'Narendra Nagar Bus Stop', 'Narendra Nagar, Tehri Garhwal', 30.160706, 78.285306),
+(8, 'Dharasu Bend', 'Dharasu, Uttarkashi', 30.614641, 78.314706),
+(9, 'Uttarkashi Bus Station', 'Uttarkashi, Uttarkashi', 30.729104, 78.440350),
+(10, 'Devprayag Bus Stop', 'Devprayag, Tehri Garhwal', 30.146144, 78.598585),
+(11, 'Srinagar Bus Station', 'Srinagar, Pauri Garhwal', 30.223132, 78.789949),
+(12, 'Rudraprayag Bus Station', 'Rudraprayag, Rudraprayag', 30.286560, 78.980720),
+(13, 'Karnaprayag Bus Stop', 'Karnaprayag, Chamoli', 30.229537, 79.210810),
+(14, 'Nandprayag Bus Stop', 'Nandprayag, Chamoli', 30.331880, 79.319920),
+(15, 'Joshimath Bus Station', 'Joshimath, Chamoli', 30.555575, 79.561261),
+(16, 'Badrinath Bus Station', 'Badrinath, Chamoli', 30.742330, 79.493026),
+(17, 'Tilwara Bus Stop', 'Tilwara, Rudraprayag', 30.345610, 78.976600),
+(18, 'Guptkashi Bus Stop', 'Guptkashi, Rudraprayag', 30.528324, 79.081776),
+(19, 'Sonprayag Bus Stop', 'Sonprayag, Rudraprayag', 30.631706, 78.998662),
+(20, 'Gaurikund Bus Stand', 'Gaurikund, Rudraprayag', 30.653402, 79.026820),
+(21, 'Bhatwari Bus Stop', 'Bhatwari, Uttarkashi', 30.811160, 78.619540),
+(22, 'Gangotri Bus Stand', 'Gangotri, Uttarkashi', 30.994368, 78.939870),
+(23, 'Vikasnagar Bus Stand', 'Vikasnagar, Dehradun', 30.468922, 77.771100),
+(24, 'Barkot Bus Stand', 'Barkot, Uttarkashi', 30.808606, 78.205961),
+(25, 'Janki Chatti Bus Stand', 'Janki Chatti (Yamunotri), Uttarkashi', 30.976451, 78.438337),
+(26, 'Chamoli Bus Station', 'Chamoli, Chamoli', 30.402943, 79.331042),
+(27, 'Ghansali Bus Stand', 'Ghansali, Tehri Garhwal', 30.603913, 78.730522),
+(28, 'Roorkee Bus Stand', 'Roorkee, Haridwar', 29.869349, 77.890212),
+(29, 'Muzaffarnagar Bus Stand', 'Muzaffarnagar, Uttar Pradesh', 29.449698, 77.742933),
+(30, 'Meerut Bus Stand', 'Meerut, Uttar Pradesh', 29.001856, 77.767967),
+(31, 'Delhi Kashmiri Gate ISBT', 'Kashmiri Gate, Delhi', 28.668696, 77.230423),
+(32, 'Noida Sector 62', 'Sector 62, Noida, Uttar Pradesh', 28.621145, 77.364349),
+(33, 'Delhi Anand Vihar ISBT', 'Anand Vihar, Delhi', 28.648984, 77.318288),
+(34, 'Rudrapur Bus Stand', 'Rudrapur, Udham Singh Nagar', 28.970718, 79.397284),
+(35, 'Rampur Bus Stand', 'Rampur, Uttar Pradesh', 28.801400, 79.028434),
+(36, 'Moradabad Bus Stand', 'Moradabad, Uttar Pradesh', 28.879655, 78.809534),
+(37, 'Hapur Bus Stand', 'Hapur, Uttar Pradesh', 28.730600, 77.775900),
+(38, 'Haridwar ISBT', 'Haridwar, Haridwar', 29.938447, 78.145298),
+(39, 'Kashipur Bus Stand', 'Kashipur, Udham Singh Nagar', 29.211757, 78.961731),
+(40, 'Haldwani Bus Station', 'Haldwani, Nainital', 29.214481, 79.527901),
+(41, 'Najibabad Bus Stand', 'Najibabad, Bijnor, Uttar Pradesh', 29.613132, 78.343007),
+(42, 'Paonta Sahib Bus Stand', 'Paonta Sahib, Sirmaur, Himachal Pradesh', 30.438444, 77.621177),
+(43, 'Chandigarh ISBT Sector 43', 'Sector 43, Chandigarh', 30.716327, 76.742692),
+(44, 'Gurugram Bus Stand', 'Gurugram, Haryana', 28.464615, 77.029919),
+(45, 'Nainital Bus Station', 'Nainital, Nainital', 29.390529, 79.460869),
+(46, 'Almora Bus Station', 'Almora, Almora', 29.601699, 79.663264),
+(47, 'Bageshwar Bus Station', 'Bageshwar, Bageshwar', 29.837601, 79.771398),
+(48, 'Pithoragarh Bus Station', 'Pithoragarh, Pithoragarh', 29.585871, 80.215167),
+(49, 'Doiwala Bus Stop', 'Doiwala, Dehradun', 30.176359, 78.124644),
+(50, 'Kotdwar Bus Station', 'Kotdwar, Pauri Garhwal', 29.745982, 78.520136);
+
+-- ROUTES
+INSERT INTO routes (route_id, source, destination, distance_km, duration, route_type) VALUES
+(1, 'Dehradun ISBT', 'Mussoorie Library Bus Stand', 35.0, '01:25:00', 'HILL'),
+(2, 'Dehradun ISBT', 'Dhanaulti Bus Stop', 60.0, '02:25:00', 'HILL'),
+(3, 'Dehradun ISBT', 'Chamba Bus Stand', 85.0, '03:25:00', 'HILL'),
+(4, 'Dehradun ISBT', 'New Tehri Bus Station', 105.0, '04:00:00', 'HILL'),
+(5, 'Dehradun ISBT', 'Uttarkashi Bus Station', 165.0, '06:05:00', 'HILL'),
+(6, 'Dehradun ISBT', 'Srinagar Bus Station', 150.0, '05:35:00', 'HILL'),
+(7, 'Rishikesh Bus Stand', 'Badrinath Bus Station', 295.0, '10:30:00', 'HILL'),
+(8, 'Haridwar ISBT', 'Badrinath Bus Station', 320.0, '11:25:00', 'HILL'),
+(9, 'Rishikesh Bus Stand', 'Gaurikund Bus Stand', 210.0, '07:45:00', 'HILL'),
+(10, 'Rishikesh Bus Stand', 'Gangotri Bus Stand', 220.0, '08:30:00', 'HILL'),
+(11, 'Dehradun ISBT', 'Janki Chatti Bus Stand', 180.0, '06:40:00', 'HILL'),
+(12, 'Dehradun ISBT', 'Chamoli Bus Station', 255.0, '09:05:00', 'HILL'),
+(13, 'Rishikesh Bus Stand', 'Ghansali Bus Stand', 120.0, '04:50:00', 'HILL'),
+(14, 'Dehradun ISBT', 'Delhi Kashmiri Gate ISBT', 250.0, '05:55:00', 'INTERSTATE'),
+(15, 'Haridwar ISBT', 'Delhi Kashmiri Gate ISBT', 222.0, '05:15:00', 'INTERSTATE'),
+(16, 'Haldwani Bus Station', 'Delhi Anand Vihar ISBT', 285.0, '06:45:00', 'INTERSTATE'),
+(17, 'Dehradun ISBT', 'Haldwani Bus Station', 285.0, '07:10:00', 'PLAIN'),
+(18, 'Kotdwar Bus Station', 'Delhi Kashmiri Gate ISBT', 210.0, '05:00:00', 'INTERSTATE'),
+(19, 'Dehradun ISBT', 'Chandigarh ISBT Sector 43', 170.0, '04:30:00', 'INTERSTATE'),
+(20, 'Dehradun ISBT', 'Gurugram Bus Stand', 310.0, '07:25:00', 'INTERSTATE'),
+(21, 'Nainital Bus Station', 'Delhi Anand Vihar ISBT', 300.0, '07:30:00', 'INTERSTATE'),
+(22, 'Dehradun ISBT', 'Haridwar ISBT', 52.0, '01:30:00', 'PLAIN'),
+(23, 'Dehradun ISBT', 'Rishikesh Bus Stand', 43.0, '01:15:00', 'PLAIN'),
+(24, 'Dehradun ISBT', 'Pithoragarh Bus Station', 450.0, '13:15:00', 'HILL');
+
+-- ROUTE_STOPS
+INSERT INTO route_stops (route_id, stop_id, sequence_number, arrival_time, departure_time) VALUES
+(1, 1, 1, NULL, '06:00:00'),
+(1, 2, 2, '07:25:00', NULL),
+(2, 1, 1, NULL, '06:30:00'),
+(2, 2, 2, '07:55:00', '07:58:00'),
+(2, 3, 3, '08:55:00', NULL),
+(3, 1, 1, NULL, '07:00:00'),
+(3, 2, 2, '08:25:00', '08:30:00'),
+(3, 3, 3, '09:25:00', '09:30:00'),
+(3, 4, 4, '10:25:00', NULL),
+(4, 1, 1, NULL, '07:00:00'),
+(4, 2, 2, '08:20:00', '08:25:00'),
+(4, 3, 3, '09:20:00', '09:25:00'),
+(4, 4, 4, '10:15:00', '10:20:00'),
+(4, 5, 5, '11:00:00', NULL),
+(5, 1, 1, NULL, '05:30:00'),
+(5, 6, 2, '07:10:00', '07:15:00'),
+(5, 7, 3, '07:55:00', '08:00:00'),
+(5, 5, 4, '08:50:00', '08:55:00'),
+(5, 8, 5, '09:55:00', '10:00:00'),
+(5, 9, 6, '11:35:00', NULL),
+(6, 1, 1, NULL, '05:00:00'),
+(6, 6, 2, '06:40:00', '06:45:00'),
+(6, 10, 3, '09:15:00', '09:20:00'),
+(6, 11, 4, '10:35:00', NULL),
+(7, 6, 1, NULL, '06:00:00'),
+(7, 10, 2, '08:30:00', '08:35:00'),
+(7, 11, 3, '09:45:00', '09:50:00'),
+(7, 12, 4, '11:00:00', '11:05:00'),
+(7, 13, 5, '12:15:00', '12:20:00'),
+(7, 15, 6, '15:05:00', '15:10:00'),
+(7, 16, 7, '16:30:00', NULL),
+(8, 38, 1, NULL, '05:30:00'),
+(8, 6, 2, '06:25:00', '06:30:00'),
+(8, 10, 3, '08:55:00', '09:00:00'),
+(8, 11, 4, '10:10:00', '10:15:00'),
+(8, 12, 5, '11:25:00', '11:30:00'),
+(8, 13, 6, '12:40:00', '12:45:00'),
+(8, 15, 7, '15:30:00', '15:35:00'),
+(8, 16, 8, '16:55:00', NULL),
+(9, 6, 1, NULL, '05:00:00'),
+(9, 10, 2, '07:35:00', '07:40:00'),
+(9, 11, 3, '08:55:00', '09:00:00'),
+(9, 12, 4, '10:10:00', '10:15:00'),
+(9, 17, 5, '11:05:00', '11:10:00'),
+(9, 18, 6, '11:50:00', '11:55:00'),
+(9, 19, 7, '12:25:00', '12:30:00'),
+(9, 20, 8, '12:45:00', NULL),
+(10, 6, 1, NULL, '07:00:00'),
+(10, 7, 2, '07:45:00', '07:50:00'),
+(10, 5, 3, '08:45:00', '08:50:00'),
+(10, 8, 4, '09:55:00', '10:00:00'),
+(10, 9, 5, '11:35:00', '11:40:00'),
+(10, 21, 6, '12:35:00', '12:40:00'),
+(10, 22, 7, '15:30:00', NULL),
+(11, 1, 1, NULL, '05:30:00'),
+(11, 23, 2, '06:50:00', '06:55:00'),
+(11, 24, 3, '10:30:00', '10:35:00'),
+(11, 25, 4, '12:10:00', NULL),
+(12, 1, 1, NULL, '06:30:00'),
+(12, 6, 2, '08:05:00', '08:10:00'),
+(12, 10, 3, '10:35:00', '10:40:00'),
+(12, 11, 4, '11:50:00', '11:55:00'),
+(12, 12, 5, '13:05:00', '13:10:00'),
+(12, 13, 6, '14:20:00', '14:25:00'),
+(12, 26, 7, '15:35:00', NULL),
+(13, 6, 1, NULL, '04:00:00'),
+(13, 7, 2, '04:50:00', '04:55:00'),
+(13, 5, 3, '05:50:00', '05:55:00'),
+(13, 27, 4, '08:50:00', NULL),
+(14, 1, 1, NULL, '05:00:00'),
+(14, 28, 2, '06:35:00', '06:40:00'),
+(14, 29, 3, '08:05:00', '08:10:00'),
+(14, 30, 4, '09:25:00', '09:30:00'),
+(14, 32, 5, '10:15:00', '10:20:00'),
+(14, 31, 6, '10:55:00', NULL),
+(15, 38, 1, NULL, '08:00:00'),
+(15, 29, 2, '10:15:00', '10:20:00'),
+(15, 30, 3, '11:35:00', '11:40:00'),
+(15, 31, 4, '13:15:00', NULL),
+(16, 40, 1, NULL, '09:30:00'),
+(16, 34, 2, '10:05:00', '10:10:00'),
+(16, 35, 3, '11:05:00', '11:10:00'),
+(16, 36, 4, '11:40:00', '11:45:00'),
+(16, 37, 5, '13:40:00', '13:45:00'),
+(16, 33, 6, '16:15:00', NULL),
+(17, 1, 1, NULL, '06:00:00'),
+(17, 38, 2, '07:15:00', '07:20:00'),
+(17, 39, 3, '10:45:00', '10:50:00'),
+(17, 40, 4, '13:10:00', NULL),
+(18, 50, 1, NULL, '04:00:00'),
+(18, 41, 2, '04:45:00', '04:50:00'),
+(18, 30, 3, '07:35:00', '07:40:00'),
+(18, 31, 4, '09:00:00', NULL),
+(19, 1, 1, NULL, '11:30:00'),
+(19, 42, 2, '13:05:00', '13:10:00'),
+(19, 43, 3, '16:00:00', NULL),
+(20, 1, 1, NULL, '09:30:00'),
+(20, 28, 2, '11:05:00', '11:10:00'),
+(20, 30, 3, '13:55:00', '14:00:00'),
+(20, 31, 4, '15:25:00', '15:30:00'),
+(20, 44, 5, '16:55:00', NULL),
+(21, 45, 1, NULL, '20:30:00'),
+(21, 40, 2, '21:30:00', '21:35:00'),
+(21, 34, 3, '22:10:00', '22:15:00'),
+(21, 35, 4, '23:10:00', '23:15:00'),
+(21, 36, 5, '23:45:00', '23:50:00'),
+(21, 33, 6, '04:00:00', NULL),
+(22, 1, 1, NULL, '06:15:00'),
+(22, 49, 2, '07:00:00', '07:03:00'),
+(22, 38, 3, '07:45:00', NULL),
+(23, 1, 1, NULL, '06:00:00'),
+(23, 49, 2, '06:45:00', '06:48:00'),
+(23, 6, 3, '07:15:00', NULL),
+(24, 1, 1, NULL, '08:00:00'),
+(24, 38, 2, '09:30:00', '09:35:00'),
+(24, 39, 3, '13:35:00', '13:40:00'),
+(24, 40, 4, '16:25:00', '16:30:00'),
+(24, 46, 5, '18:20:00', '18:25:00'),
+(24, 47, 6, '19:35:00', '19:40:00'),
+(24, 48, 7, '21:15:00', NULL);
+
+-- BUSES
+INSERT INTO buses (bus_id, bus_number, bus_type, capacity, status) VALUES
+(1, 'UK07PA1001', 'Ordinary', 48, 'ACTIVE'),
+(2, 'UK07PA1002', 'Ordinary', 48, 'ACTIVE'),
+(3, 'UK07PA1003', 'Ordinary', 52, 'ACTIVE'),
+(4, 'UK07PA2001', 'Janrath AC', 41, 'ACTIVE'),
+(5, 'UK07PA2002', 'Janrath AC', 41, 'ACTIVE'),
+(6, 'UK07PA3001', 'Volvo Non Stop', 45, 'ACTIVE'),
+(7, 'UK07PA3002', 'Volvo Non Stop', 45, 'ACTIVE'),
+(8, 'UK07PA3003', 'Volvo Super Luxury', 41, 'ACTIVE'),
+(9, 'UK07PA4001', 'UTC Smart AC Non Stop', 45, 'ACTIVE'),
+(10, 'UK07PA4002', 'UTC Smart AC Non Stop', 45, 'MAINTENANCE'),
+(11, 'UK07PA5001', 'AC', 45, 'ACTIVE'),
+(12, 'UK07PA6001', 'UTC Mini', 17, 'ACTIVE'),
+(13, 'UK07PA6002', 'UTC Mini', 17, 'ACTIVE'),
+(14, 'UK07PA6003', 'UTC Mini', 17, 'ACTIVE'),
+(15, 'UK07PA7001', 'Char Dham', 48, 'ACTIVE'),
+(16, 'UK07PA7002', 'Char Dham', 48, 'ACTIVE'),
+(17, 'UK07PA8001', 'Ordinary', 48, 'ACTIVE'),
+(18, 'UK07PA8002', 'Ordinary', 48, 'ACTIVE'),
+(19, 'UK14PA1101', 'Ordinary', 52, 'ACTIVE'),
+(20, 'UK14PA1102', 'Ordinary', 48, 'ACTIVE'),
+(21, 'UK14PA2101', 'AC', 45, 'ACTIVE'),
+(22, 'UK14PA7003', 'Char Dham', 48, 'ACTIVE'),
+(23, 'UK08PA1201', 'Ordinary', 48, 'ACTIVE'),
+(24, 'UK08PA1202', 'Janrath AC', 41, 'ACTIVE'),
+(25, 'UK08PA1203', 'Volvo Non Stop', 45, 'ACTIVE'),
+(26, 'UK08PA7004', 'Char Dham', 48, 'ACTIVE'),
+(27, 'UK04PA1301', 'Ordinary', 48, 'ACTIVE'),
+(28, 'UK04PA1302', 'AC', 45, 'ACTIVE'),
+(29, 'UK06PA1401', 'Ordinary', 52, 'ACTIVE'),
+(30, 'UK06PA1402', 'Volvo Non Stop', 45, 'ACTIVE'),
+(31, 'UK15PA1501', 'Ordinary', 48, 'ACTIVE'),
+(32, 'UK09PA1601', 'Ordinary', 48, 'MAINTENANCE'),
+(33, 'UK09PA1602', 'Ordinary', 48, 'ACTIVE'),
+(34, 'UK07PA3004', 'Volvo Non Stop', 45, 'INACTIVE'),
+(35, 'UK14PA7005', 'Char Dham', 48, 'ACTIVE'),
+(36, 'UK14PA1103', 'Ordinary', 48, 'ACTIVE'),
+(37, 'UK14PA1104', 'Ordinary', 52, 'ACTIVE'),
+(38, 'UK07PA8003', 'Ordinary', 48, 'ACTIVE'),
+(39, 'UK07PA8004', 'Ordinary', 48, 'ACTIVE'),
+(40, 'UK14PA1105', 'Ordinary', 48, 'ACTIVE'),
+(41, 'UK07PA8005', 'Ordinary', 52, 'ACTIVE'),
+(42, 'UK07PA8006', 'Ordinary', 48, 'ACTIVE'),
+(43, 'UK07PA9001', 'UTC Smart Sleeper', 30, 'ACTIVE');
+
+-- DRIVERS
+INSERT INTO drivers (driver_id, name, phone_number, license_number, driver_status, assigned_bus) VALUES
+(1, 'Ramesh Singh Rawat', '9411122301', 'UK072011001231', 'ACTIVE', 1),
+(2, 'Mohan Lal Arya', '9411122302', 'UK072011001232', 'ACTIVE', 2),
+(3, 'Devendra Singh Negi', '9411122303', 'UK072012001233', 'ACTIVE', 3),
+(4, 'Suresh Chandra Joshi', '9411122304', 'UK072010001234', 'ACTIVE', 4),
+(5, 'Harish Ramola', '9411122305', 'UK072013001235', 'ACTIVE', 5),
+(6, 'Vinod Kumar', '9411122306', 'UK072009001236', 'ACTIVE', 6),
+(7, 'Prakash Chandra Bahuguna', '9411122307', 'UK072011001237', 'ACTIVE', 7),
+(8, 'Anil Bisht', '9411122308', 'UK072014001238', 'ACTIVE', 8),
+(9, 'Mahendra Singh Rana', '9411122309', 'UK072010001239', 'ACTIVE', 9),
+(10, 'Bhagat Singh Chauhan', '9411122310', 'UK072012001240', 'INACTIVE', 10),
+(11, 'Ashok Kumar Saini', '9411122311', 'UK072011001241', 'ACTIVE', 11),
+(12, 'Deepak Nautiyal', '9411122312', 'UK072013001242', 'ACTIVE', 12),
+(13, 'Jagmohan Singh', '9411122313', 'UK072010001243', 'ACTIVE', 13),
+(14, 'Ravindra Prasad', '9411122314', 'UK072012001244', 'ACTIVE', 14),
+(15, 'Kuldeep Singh', '9411122315', 'UK072011001245', 'ACTIVE', 15),
+(16, 'Sohan Pal', '9411122316', 'UK072009001246', 'ACTIVE', 16),
+(17, 'Satish Chand', '9411122317', 'UK072013001247', 'ACTIVE', 17),
+(18, 'Vikram Singh Panwar', '9411122318', 'UK072011001248', 'ACTIVE', 18),
+(19, 'Rajesh Chandra', '9411122319', 'UK072010001249', 'ACTIVE', 19),
+(20, 'Naveen Raturi', '9411122320', 'UK072014001250', 'ACTIVE', 20),
+(21, 'Pradeep Rawat', '9411122321', 'UK072012001251', 'ACTIVE', NULL),
+(22, 'Dinesh Sati', '9411122322', 'UK072013001252', 'ACTIVE', NULL);
+
+-- SCHEDULES
+INSERT INTO schedules (schedule_id, bus_id, route_id, departure_time, arrival_time, operating_days) VALUES
+(1, 12, 1, '06:00:00', '07:25:00', 'DAILY'),
+(2, 13, 1, '07:10:00', '08:35:00', 'DAILY'),
+(3, 14, 1, '08:05:00', '09:30:00', 'DAILY'),
+(4, 1, 1, '09:30:00', '10:55:00', 'DAILY'),
+(5, 12, 1, '11:35:00', '13:00:00', 'DAILY'),
+(6, 13, 1, '13:00:00', '14:25:00', 'DAILY'),
+(7, 1, 1, '16:45:00', '18:10:00', 'DAILY'),
+(8, 2, 2, '06:30:00', '08:55:00', 'DAILY'),
+(9, 14, 2, '12:00:00', '14:25:00', 'DAILY'),
+(10, 17, 3, '07:00:00', '10:25:00', 'DAILY'),
+(11, 2, 3, '14:00:00', '17:25:00', 'DAILY'),
+(12, 33, 4, '07:00:00', '11:00:00', 'DAILY'),
+(13, 18, 4, '15:00:00', '19:00:00', 'DAILY'),
+(14, 3, 5, '05:30:00', '11:35:00', 'DAILY'),
+(15, 17, 5, '13:30:00', '19:35:00', 'DAILY'),
+(16, 18, 6, '05:00:00', '10:35:00', 'DAILY'),
+(17, 33, 6, '13:30:00', '19:05:00', 'DAILY'),
+(18, 19, 7, '06:00:00', '16:30:00', 'DAILY (APR-NOV)'),
+(19, 22, 7, '07:00:00', '17:30:00', 'DAILY (APR-NOV)'),
+(20, 35, 7, '11:00:00', '21:30:00', 'DAILY (APR-NOV)'),
+(21, 19, 7, '17:00:00', '03:30:00', 'DAILY (APR-NOV)'),
+(22, 26, 8, '05:30:00', '16:55:00', 'DAILY (APR-NOV)'),
+(23, 36, 9, '05:00:00', '12:45:00', 'DAILY (APR-NOV)'),
+(24, 37, 10, '07:00:00', '15:30:00', 'MON-SAT'),
+(25, 38, 11, '05:30:00', '12:10:00', 'DAILY'),
+(26, 39, 12, '06:30:00', '15:35:00', 'DAILY'),
+(27, 40, 13, '04:00:00', '08:50:00', 'MON-SAT'),
+(28, 6, 14, '04:00:00', '09:55:00', 'DAILY'),
+(29, 7, 14, '08:00:00', '13:55:00', 'DAILY'),
+(30, 8, 14, '12:05:00', '18:00:00', 'DAILY'),
+(31, 6, 14, '16:00:00', '21:55:00', 'DAILY'),
+(32, 7, 14, '21:00:00', '02:55:00', 'DAILY'),
+(33, 42, 14, '05:00:00', '10:55:00', 'DAILY'),
+(34, 42, 14, '10:30:00', '16:25:00', 'DAILY'),
+(35, 42, 14, '23:00:00', '04:55:00', 'DAILY'),
+(36, 4, 14, '07:30:00', '13:25:00', 'DAILY'),
+(37, 5, 14, '08:30:00', '14:25:00', 'DAILY'),
+(38, 4, 14, '22:20:00', '04:15:00', 'DAILY'),
+(39, 25, 15, '08:00:00', '13:15:00', 'DAILY'),
+(40, 25, 15, '10:00:00', '15:15:00', 'DAILY'),
+(41, 29, 16, '09:30:00', '16:15:00', 'DAILY'),
+(42, 30, 16, '21:30:00', '04:15:00', 'DAILY'),
+(43, 1, 17, '06:00:00', '13:10:00', 'DAILY'),
+(44, 9, 17, '09:30:00', '16:40:00', 'DAILY'),
+(45, 2, 17, '20:30:00', '03:40:00', 'DAILY'),
+(46, 31, 18, '04:00:00', '09:00:00', 'DAILY'),
+(47, 31, 18, '15:00:00', '20:00:00', 'DAILY'),
+(48, 27, 19, '11:30:00', '16:00:00', 'DAILY'),
+(49, 28, 19, '12:00:00', '16:30:00', 'DAILY'),
+(50, 30, 20, '09:30:00', '16:55:00', 'DAILY'),
+(51, 8, 20, '22:00:00', '05:25:00', 'DAILY'),
+(52, 27, 21, '20:30:00', '04:00:00', 'DAILY'),
+(53, 41, 22, '06:15:00', '07:45:00', 'DAILY'),
+(54, 41, 22, '18:00:00', '19:30:00', 'DAILY'),
+(55, 41, 23, '09:00:00', '10:15:00', 'DAILY'),
+(56, 41, 23, '13:00:00', '14:15:00', 'DAILY'),
+(57, 23, 24, '08:00:00', '21:15:00', 'DAILY'),
+(58, 3, 24, '20:00:00', '09:15:00', 'DAILY');
+
+-- FARES
+INSERT INTO fares (fare_id, route_id, bus_type, amount) VALUES
+(1, 1, 'Ordinary', 60.00),
+(2, 1, 'UTC Mini', 70.00),
+(3, 2, 'Ordinary', 95.00),
+(4, 2, 'UTC Mini', 110.00),
+(5, 3, 'Ordinary', 130.00),
+(6, 4, 'Ordinary', 150.00),
+(7, 5, 'Ordinary', 260.00),
+(8, 5, 'AC', 350.00),
+(9, 6, 'Ordinary', 245.00),
+(10, 7, 'Ordinary', 675.00),
+(11, 7, 'Char Dham', 900.00),
+(12, 8, 'Ordinary', 730.00),
+(13, 8, 'Char Dham', 950.00),
+(14, 9, 'Ordinary', 495.00),
+(15, 9, 'AC', 620.00),
+(16, 10, 'Ordinary', 550.00),
+(17, 11, 'Ordinary', 420.00),
+(18, 12, 'Ordinary', 590.00),
+(19, 13, 'Ordinary', 340.00),
+(20, 14, 'Ordinary', 420.00),
+(21, 14, 'Janrath AC', 510.00),
+(22, 14, 'AC', 620.00),
+(23, 14, 'Volvo Non Stop', 735.00),
+(24, 15, 'Ordinary', 380.00),
+(25, 15, 'Volvo Non Stop', 615.00),
+(26, 16, 'Ordinary', 450.00),
+(27, 16, 'AC', 562.00),
+(28, 16, 'Volvo Non Stop', 793.00),
+(29, 17, 'Ordinary', 545.00),
+(30, 17, 'Janrath AC', 690.00),
+(31, 18, 'Ordinary', 380.00),
+(32, 19, 'Ordinary', 340.00),
+(33, 19, 'AC', 450.00),
+(34, 20, 'Ordinary', 455.00),
+(35, 20, 'Volvo Non Stop', 804.00),
+(36, 21, 'Ordinary', 620.00),
+(37, 21, 'Janrath AC', 720.00),
+(38, 22, 'Ordinary', 90.00),
+(39, 23, 'Ordinary', 75.00),
+(40, 24, 'Ordinary', 705.00),
+(41, 24, 'AC', 900.00);
+
+-- USERS
+INSERT INTO users (user_id, name, email, mobile_number, password, role) VALUES
+(1, 'UTC Administrator', 'admin@utconline.uk.gov.in', '8476007605',
+ '$2b$10$qUXauwp8yO9yyJVspR7PEe/AonUszQu4mMh6IOfAiNu7aXWJxa5IO', 'ADMINISTRATOR'),
+(2, 'Demo Passenger', 'passenger@example.com', '9411122399',
+ '$2b$10$TTy7eqWgq3fnvP5Wk7iedOCt2lULm7noQTjfGBPgZY/LbvTIfAb3u', 'PASSENGER');
+
+-- NOTICES
+INSERT INTO notices (notice_id, title, description, notice_date, notice_status) VALUES
+(1, 'Landslide near Sonprayag on Kedarnath route', 'Due to a landslide near Sonprayag, buses on the Rishikesh-Gaurikund route are being terminated at Sonprayag. Passengers are advised to check with the depot before travel.', '2026-09-28', 'ACTIVE'),
+(2, 'Route diversion: Dehradun-Mussoorie via Kempty', 'Dehradun-Mussoorie buses will run via the Kempty route until repair work on the main road is completed.', '2026-09-15', 'INACTIVE'),
+(3, 'Heavy rainfall alert in Chamoli district', 'Buses to Chamoli, Joshimath and Badrinath may run late by 30-60 minutes due to heavy rainfall in the region.', '2026-09-05', 'INACTIVE'),
+(4, 'Char Dham Yatra services to continue till 15 November 2026', 'Char Dham bus services from Rishikesh and Haridwar will operate till 15 November 2026. Advance booking is recommended during the festival season.', '2026-10-01', 'ACTIVE'),
+(5, 'Delhi night services - revised departure timings', 'Night Volvo and Janrath services from Dehradun ISBT to Delhi will depart as per the revised timings listed in the timetable. Passengers should reach the ISBT 30 minutes before departure.', '2026-10-05', 'ACTIVE'),
+(6, 'Uttarkashi-Gangotri road: single-lane movement near Bhatwari', 'Only single-lane movement is allowed near Bhatwari. Buses to Gangotri may take up to 1 hour extra.', '2026-10-08', 'ACTIVE');
+-- No original INSERT data was provided for BOOKINGS, PAYMENTS, FEEDBACK, or BUS_TRACKING.
+
+
